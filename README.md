@@ -157,3 +157,24 @@ Nebi/
 ## 📜 Lizenz
 
 MIT – Mach damit was du willst.
+
+---
+
+<div align="center">
+
+## ☁️ Hosted by
+
+<a href="https://nebuliton.io">
+  <img src="https://nebuliton.io/logo.png" alt="Nebuliton" width="200"/>
+</a>
+
+### [Nebuliton](https://nebuliton.io)
+
+**Premium Server Hosting** – Schnell, zuverlässig, fair.
+
+Gameserver • Discord Bots • Webhosting • VPS
+
+[🚀 Jetzt starten](https://nebuliton.io)
+
+</div>
+
