@@ -296,4 +296,68 @@ public final class ContextStore {
 
     public record ConversationMessage(String role, String content, long createdAt) {
     }
+
+    public int countKnowledge(long guildId) {
+        String sql = "SELECT COUNT(*) FROM knowledge_entries WHERE guild_id = ?;";
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to count knowledge", e);
+        }
+        return 0;
+    }
+
+    public int countBlacklist(long guildId) {
+        String sql = "SELECT COUNT(*) FROM ai_blacklist WHERE guild_id = ?;";
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to count blacklist", e);
+        }
+        return 0;
+    }
+
+    public int countContexts(long guildId) {
+        String sql = "SELECT COUNT(*) FROM user_contexts WHERE guild_id = ?;";
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to count contexts", e);
+        }
+        return 0;
+    }
+
+    public int countConversations(long guildId) {
+        String sql = "SELECT COUNT(DISTINCT user_id) FROM conversation_messages WHERE guild_id = ?;";
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to count conversations", e);
+        }
+        return 0;
+    }
 }

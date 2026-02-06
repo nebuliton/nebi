@@ -49,16 +49,16 @@ public final class Commands extends ListenerAdapter {
                 "knowledge",
                 "🧠 Server-Wissen verwalten"
         ).addSubcommands(
-                new SubcommandData("add", "➕ Wissenszeile hinzufuegen")
+                new SubcommandData("add", "➕ Wissenszeile hinzufügen")
                         .addOptions(
                                 new OptionData(OptionType.STRING, "text", "📌 Wissen", true)
                                         .setMaxLength(maxKnowledge)
                         ),
-                new SubcommandData("list", "📜 Letzte Wissenseintraege anzeigen")
+                new SubcommandData("list", "📜 Letzte Wissenseinträge anzeigen")
                         .addOptions(new OptionData(OptionType.INTEGER, "limit", "🔢 Anzahl (1-20)", false)
                                 .setMinValue(1)
                                 .setMaxValue(20)),
-                new SubcommandData("remove", "🗑️ Wissenseintrag loeschen")
+                new SubcommandData("remove", "🗑️ Wissenseintrag löschen")
                         .addOptions(new OptionData(OptionType.INTEGER, "id", "🪪 ID aus /knowledge list", true))
         );
 
@@ -80,7 +80,17 @@ public final class Commands extends ListenerAdapter {
                                 .setMaxValue(20))
         );
 
-        List<CommandData> commands = List.of(context, knowledge, blacklist);
+        CommandData forget = net.dv8tion.jda.api.interactions.commands.build.Commands.slash(
+                "forget",
+                "🧹 Lösche meine Konversationshistorie"
+        );
+
+        CommandData stats = net.dv8tion.jda.api.interactions.commands.build.Commands.slash(
+                "stats",
+                "📊 Server-Statistiken anzeigen"
+        );
+
+        List<CommandData> commands = List.of(context, knowledge, blacklist, forget, stats);
 
         if (config.discord.guildId != null && !config.discord.guildId.isBlank()) {
             Guild guild = jda.getGuildById(config.discord.guildId);
@@ -106,6 +116,8 @@ public final class Commands extends ListenerAdapter {
             case "context" -> handleContext(event);
             case "knowledge" -> handleKnowledge(event);
             case "ai-blacklist" -> handleBlacklist(event);
+            case "forget" -> handleForget(event);
+            case "stats" -> handleStats(event);
             default -> {
             }
         }
@@ -143,7 +155,7 @@ public final class Commands extends ListenerAdapter {
         }
 
         contextStore.setUserContext(event.getGuild().getIdLong(), target.getIdLong(), context);
-        event.reply("Kontext gespeichert fuer **" + safeName(target) + "**.")
+        event.reply("✅ Kontext gespeichert für **" + safeName(target) + "**.")
                 .setEphemeral(true)
                 .queue();
     }
@@ -155,7 +167,7 @@ public final class Commands extends ListenerAdapter {
         }
 
         contextStore.clearUserContext(event.getGuild().getIdLong(), target.getIdLong());
-        event.reply("Kontext geloescht fuer **" + safeName(target) + "**.")
+        event.reply("🧹 Kontext gelöscht für **" + safeName(target) + "**.")
                 .setEphemeral(true)
                 .queue();
     }
@@ -168,21 +180,21 @@ public final class Commands extends ListenerAdapter {
 
         Optional<String> context = contextStore.getUserContext(event.getGuild().getIdLong(), target.getIdLong());
         if (context.isEmpty()) {
-            event.reply("Kein Kontext gespeichert fuer **" + safeName(target) + "**.")
+            event.reply("Kein Kontext gespeichert für **" + safeName(target) + "**.")
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
         String preview = truncate(context.get(), 1800);
-        event.reply("Kontext fuer **" + safeName(target) + "**:\n" + preview)
+        event.reply("📋 Kontext für **" + safeName(target) + "**:\n" + preview)
                 .setEphemeral(true)
                 .queue();
     }
 
     private void handleKnowledge(SlashCommandInteractionEvent event) {
         if (!hasManageServer(event)) {
-            event.reply("Dafuer brauchst du Manage Server.")
+            event.reply("❌ Dafür brauchst du Manage Server.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -214,7 +226,7 @@ public final class Commands extends ListenerAdapter {
         }
 
         contextStore.addKnowledge(event.getGuild().getIdLong(), event.getUser().getIdLong(), text);
-        event.reply("Wissen gespeichert. Mein Kopf ist jetzt etwas groesser.")
+        event.reply("🧠 Wissen gespeichert!")
                 .setEphemeral(true)
                 .queue();
     }
@@ -231,7 +243,7 @@ public final class Commands extends ListenerAdapter {
             return;
         }
 
-        StringBuilder builder = new StringBuilder("Wissenseintraege:\n");
+        StringBuilder builder = new StringBuilder("📚 Wissenseinträge:\n");
         for (ContextStore.KnowledgeEntry entry : entries) {
             builder.append(entry.id())
                     .append(") ")
@@ -247,14 +259,14 @@ public final class Commands extends ListenerAdapter {
     private void handleKnowledgeRemove(SlashCommandInteractionEvent event) {
         long id = getRequiredLong(event, "id");
         contextStore.removeKnowledge(event.getGuild().getIdLong(), id);
-        event.reply("Wissenseintrag entfernt.")
+        event.reply("🗑️ Wissenseintrag gelöscht.")
                 .setEphemeral(true)
                 .queue();
     }
 
     private void handleBlacklist(SlashCommandInteractionEvent event) {
         if (!hasManageServer(event)) {
-            event.reply("Dafuer brauchst du Manage Server.")
+            event.reply("❌ Dafür brauchst du Manage Server.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -285,7 +297,7 @@ public final class Commands extends ListenerAdapter {
                 event.getUser().getIdLong(),
                 reason
         );
-        event.reply("**" + safeName(target) + "** ist jetzt auf der Blacklist. Ich antworte nicht mehr.")
+        event.reply("⛔ **" + safeName(target) + "** ist jetzt auf der Blacklist.")
                 .setEphemeral(true)
                 .queue();
     }
@@ -293,7 +305,7 @@ public final class Commands extends ListenerAdapter {
     private void handleBlacklistRemove(SlashCommandInteractionEvent event) {
         User target = event.getOption("user", event.getUser(), OptionMapping::getAsUser);
         contextStore.removeBlacklist(event.getGuild().getIdLong(), target.getIdLong());
-        event.reply("Blacklist fuer **" + safeName(target) + "** entfernt.")
+        event.reply("✅ **" + safeName(target) + "** von der Blacklist entfernt.")
                 .setEphemeral(true)
                 .queue();
     }
@@ -322,6 +334,36 @@ public final class Commands extends ListenerAdapter {
         }
 
         event.reply(truncate(builder.toString(), 1900))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void handleForget(SlashCommandInteractionEvent event) {
+        long guildId = event.getGuild().getIdLong();
+        long userId = event.getUser().getIdLong();
+        contextStore.clearConversation(guildId, userId);
+        event.reply("🧹 Hab alles vergessen, was wir geredet haben. Frischer Start!")
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void handleStats(SlashCommandInteractionEvent event) {
+        long guildId = event.getGuild().getIdLong();
+        int knowledgeCount = contextStore.countKnowledge(guildId);
+        int blacklistCount = contextStore.countBlacklist(guildId);
+        int contextCount = contextStore.countContexts(guildId);
+        int conversationCount = contextStore.countConversations(guildId);
+
+        String stats = String.format("""
+                📊 **Server-Statistiken**
+                
+                🧠 Wissenseinträge: **%d**
+                🧭 User-Kontexte: **%d**
+                💬 Aktive Konversationen: **%d**
+                🚫 Blacklist-Einträge: **%d**
+                """, knowledgeCount, contextCount, conversationCount, blacklistCount);
+
+        event.reply(stats)
                 .setEphemeral(true)
                 .queue();
     }
