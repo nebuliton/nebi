@@ -6,6 +6,7 @@ import io.nebuliton.ai.Commands;
 import io.nebuliton.ai.ContextStore;
 import io.nebuliton.ai.OpenAIClient;
 import io.nebuliton.ai.PingListener;
+import io.nebuliton.ai.PresenceManager;
 import io.nebuliton.ai.RateLimiter;
 import io.nebuliton.config.Config;
 import net.dv8tion.jda.api.JDA;
@@ -54,12 +55,17 @@ public final class Main {
             return;
         }
         printInfo("Database", Path.of(config.database.path).toAbsolutePath().toString());
-        if (config.discord.activity != null && !config.discord.activity.isBlank()) {
+
+        // Activity/Presence Info
+        if (config.presence.enabled && config.presence.activities != null && !config.presence.activities.isEmpty()) {
+            printInfo("Presence", config.presence.activities.size() + " Status (rotiert alle " + config.presence.intervalSeconds + "s)");
+        } else if (config.discord.activity != null && !config.discord.activity.isBlank()) {
             String activityType = config.discord.activityType == null || config.discord.activityType.isBlank()
                     ? "playing"
                     : config.discord.activityType;
             printInfo("Activity", config.discord.activity + " (" + activityType + ")");
         }
+
         printInfo("Status", "Starting Discord connection...");
         Database database = new Database(config.database.path);
         ContextStore contextStore = new ContextStore(database);
@@ -75,9 +81,12 @@ public final class Main {
                         new PingListener(aiManager, contextStore, config, rateLimiter)
                 );
 
-        Activity activity = buildActivity(config.discord);
-        if (activity != null) {
-            builder.setActivity(activity);
+        // Nur statische Activity setzen wenn Presence-Rotation NICHT aktiv ist
+        if (!config.presence.enabled) {
+            Activity activity = buildActivity(config.discord);
+            if (activity != null) {
+                builder.setActivity(activity);
+            }
         }
 
         if (config.discord.insecureSkipHostnameVerification) {
@@ -96,6 +105,11 @@ public final class Main {
             printInfo("Commands", "Registering globally...");
         }
         Commands.registerCommands(jda, config);
+
+        // Starte Presence-Rotation wenn aktiviert
+        PresenceManager presenceManager = new PresenceManager(jda, config);
+        presenceManager.start();
+
         System.out.println(color(GREEN, "Ready") + " Mention me with @ to chat.");
     }
 
@@ -113,7 +127,7 @@ public final class Main {
     }
 
     private static void printBanner() {
-        System.out.println(color(BOLD + CYAN, " _   _  _____  ____  ___ "));
+        System.out.println(color(BOLD + CYAN, " _   _  _____  ____ ___ "));
         System.out.println(color(BOLD + CYAN, "| \\ | || ____|| __ )_ _|"));
         System.out.println(color(BOLD + CYAN, "|  \\| ||  _|  |  _ \\| | "));
         System.out.println(color(BOLD + CYAN, "| |\\  || |___ | |_) | | "));

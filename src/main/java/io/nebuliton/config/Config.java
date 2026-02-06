@@ -9,12 +9,15 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Config {
     public Discord discord = new Discord();
     public OpenAI openai = new OpenAI();
     public Database database = new Database();
     public UX ux = new UX();
+    public Presence presence = new Presence();
 
     public static Config load(Path path) {
         if (!Files.exists(path)) {
@@ -31,10 +34,89 @@ public class Config {
             }
             config.applyDefaults();
             config.validate();
+
+            // Speichere die Config mit allen ergänzten Feldern
+            config.save(path);
+
             return config;
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load config file at " + path, e);
         }
+    }
+
+    public void save(Path path) {
+        try {
+            StringBuilder sb = new StringBuilder();
+
+            // Discord
+            sb.append("discord:\n");
+            sb.append("  token: \"").append(escapeYaml(discord.token)).append("\"\n");
+            sb.append("  guildId: \"").append(discord.guildId != null ? discord.guildId : "").append("\"\n");
+
+            // Nur statische activity zeigen wenn presence nicht aktiv
+            if (!presence.enabled) {
+                sb.append("  activity: \"").append(escapeYaml(discord.activity)).append("\"\n");
+                sb.append("  activityType: \"").append(discord.activityType).append("\"\n");
+            }
+            sb.append("  insecureSkipHostnameVerification: ").append(discord.insecureSkipHostnameVerification).append("\n");
+
+            // Presence
+            sb.append("\n# Wechselnde Status-Nachrichten\n");
+            sb.append("presence:\n");
+            sb.append("  enabled: ").append(presence.enabled).append("\n");
+            sb.append("  intervalSeconds: ").append(presence.intervalSeconds).append("\n");
+            sb.append("  activities:\n");
+            if (presence.activities != null && !presence.activities.isEmpty()) {
+                for (String activity : presence.activities) {
+                    sb.append("    - \"").append(escapeYaml(activity)).append("\"\n");
+                }
+            } else {
+                sb.append("    - \"listening:🎧 auf {servers} Servern\"\n");
+                sb.append("    - \"watching:👀 {users} User\"\n");
+                sb.append("    - \"playing:⏱️ seit {uptime} online\"\n");
+                sb.append("    - \"competing:🏓 {ping}ms Ping\"\n");
+                sb.append("    - \"playing:💬 @NebiAI zum Chatten\"\n");
+            }
+
+            // OpenAI
+            sb.append("\nopenai:\n");
+            sb.append("  apiKey: \"").append(escapeYaml(openai.apiKey)).append("\"\n");
+            sb.append("  baseUrl: \"").append(openai.baseUrl).append("\"\n");
+            sb.append("  model: \"").append(openai.model).append("\"\n");
+            sb.append("  temperature: ").append(openai.temperature).append("\n");
+            sb.append("  maxTokens: ").append(openai.maxTokens).append("\n");
+            sb.append("  timeoutSeconds: ").append(openai.timeoutSeconds).append("\n");
+            sb.append("  systemPrompt: |\n");
+            for (String line : openai.systemPrompt.split("\n")) {
+                sb.append("    ").append(line).append("\n");
+            }
+
+            // Database
+            sb.append("\ndatabase:\n");
+            sb.append("  path: \"").append(database.path).append("\"\n");
+
+            // UX
+            sb.append("\nux:\n");
+            sb.append("  cooldownSeconds: ").append(ux.cooldownSeconds).append("\n");
+            sb.append("  cooldownReply: \"").append(escapeYaml(ux.cooldownReply)).append("\"\n");
+            sb.append("  errorReply: \"").append(escapeYaml(ux.errorReply)).append("\"\n");
+            sb.append("  typingIndicator: ").append(ux.typingIndicator).append("\n");
+            sb.append("  maxUserMessageLength: ").append(ux.maxUserMessageLength).append("\n");
+            sb.append("  maxContextLength: ").append(ux.maxContextLength).append("\n");
+            sb.append("  maxKnowledgeLength: ").append(ux.maxKnowledgeLength).append("\n");
+            sb.append("  maxKnowledgeEntries: ").append(ux.maxKnowledgeEntries).append("\n");
+            sb.append("  maxConversationMessages: ").append(ux.maxConversationMessages).append("\n");
+            sb.append("  maxConversationMessageLength: ").append(ux.maxConversationMessageLength).append("\n");
+
+            Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            // Ignorieren - Config speichern ist nicht kritisch
+        }
+    }
+
+    private static String escapeYaml(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private void applyDefaults() {
@@ -49,6 +131,9 @@ public class Config {
         }
         if (ux == null) {
             ux = new UX();
+        }
+        if (presence == null) {
+            presence = new Presence();
         }
         if (discord.activity == null) {
             discord.activity = "chillt und antwortet auf @mention";
@@ -104,6 +189,17 @@ public class Config {
                   activityType: "listening"
                   insecureSkipHostnameVerification: false
 
+                # Wechselnde Status-Nachrichten (optional)
+                presence:
+                  enabled: false
+                  intervalSeconds: 30
+                  activities:
+                    - "listening:🎧 auf {servers} Servern"
+                    - "watching:👀 {users} User"
+                    - "playing:⏱️ seit {uptime} online"
+                    - "competing:🏓 {ping}ms Ping"
+                    - "playing:💬 @NebiAI zum Chatten"
+
                 openai:
                   apiKey: "PUT_OPENAI_API_KEY_HERE"
                   baseUrl: "https://api.openai.com/v1"
@@ -140,6 +236,12 @@ public class Config {
         public String activity = "chillt und antwortet auf @mention";
         public String activityType = "listening";
         public boolean insecureSkipHostnameVerification = false;
+    }
+
+    public static class Presence {
+        public boolean enabled = false;
+        public int intervalSeconds = 30;
+        public List<String> activities = new ArrayList<>();
     }
 
     public static class OpenAI {

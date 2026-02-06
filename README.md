@@ -95,6 +95,17 @@ discord:
   guildId: "123456789"  # Optional: Schnellere Command-Updates
   activityType: "listening"  # playing, listening, watching, competing
 
+# Wechselnde Status-Nachrichten
+presence:
+  enabled: true
+  intervalSeconds: 30
+  activities:
+    - "listening:🎧 auf {servers} Servern"
+    - "watching:👀 {users} User"
+    - "playing:⏱️ seit {uptime} online"
+    - "competing:🏓 {ping}ms Ping"
+    - "playing:💬 @NebiAI zum Chatten"
+
 openai:
   apiKey: "sk-..."
   model: "gpt-4o-mini"
@@ -104,6 +115,36 @@ openai:
 ux:
   cooldownSeconds: 0  # 0 = kein Cooldown
   maxConversationMessages: 12  # 0 = Memory aus
+```
+
+### 🎭 Presence Placeholder
+
+| Placeholder | Beschreibung | Beispiel |
+|-------------|--------------|----------|
+| `{servers}` | Anzahl Server | `5` |
+| `{users}` | Anzahl User (alle Server) | `1337` |
+| `{uptime}` | Bot-Uptime | `2h 15m` |
+| `{ping}` | Gateway Ping | `42` |
+| `{memory}` | RAM-Verbrauch | `128MB` |
+| `{version}` | Bot-Version | `1.0` |
+| `{date}` | Aktuelles Datum | `2024-01-15` |
+| `{time}` | Aktuelle Uhrzeit | `14:30` |
+
+### Activity-Typen in Presence
+
+Prefix den Status mit dem Typ:
+- `playing:Text` → "Spielt Text"
+- `listening:Text` → "Hört Text zu"
+- `watching:Text` → "Schaut Text"
+- `competing:Text` → "Tritt an in Text"
+- `streaming:Text` → "Streamt Text"
+
+Beispiel:
+```yaml
+activities:
+  - "listening:🎧 {users} Usern zu"
+  - "watching:🌐 über {servers} Server"
+  - "playing:🚀 Version {version}"
 ```
 
 ---
