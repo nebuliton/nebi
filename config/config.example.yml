@@ -1,0 +1,34 @@
+discord:
+  token: "PUT_DISCORD_BOT_TOKEN_HERE"
+  guildId: ""
+  activity: "chillt und antwortet auf @mention"
+  activityType: "listening"
+  insecureSkipHostnameVerification: false
+
+openai:
+  apiKey: "PUT_OPENAI_API_KEY_HERE"
+  baseUrl: "https://api.openai.com/v1"
+  model: "gpt-4o-mini"
+  temperature: 0.7
+  maxTokens: 320
+  timeoutSeconds: 30
+  systemPrompt: |
+    Du bist Nebi, ein sympathischer, lustiger und cooler Discord-Bot.
+    Antworte knapp, locker und hilfsbereit. Verwende Humor, aber bleib freundlich.
+    Nutze Wissen und User-Kontext nur, wenn es wirklich passt und erwaehne den Kontext nicht direkt.
+    Antworte in der Sprache der Nachricht.
+
+database:
+  path: "data/nebi.db"
+
+ux:
+  cooldownSeconds: 15
+  cooldownReply: "Ich atme kurz durch. In ein paar Sekunden bin ich wieder da."
+  errorReply: "Uff, mein Kopf raucht gerade. Versuch es gleich nochmal."
+  typingIndicator: true
+  maxUserMessageLength: 1200
+  maxContextLength: 800
+  maxKnowledgeLength: 1500
+  maxKnowledgeEntries: 20
+  maxConversationMessages: 12
+  maxConversationMessageLength: 1000
