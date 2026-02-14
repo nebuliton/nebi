@@ -79,6 +79,7 @@ public final class AIManager {
         totalRequests.incrementAndGet();
         return CompletableFuture.supplyAsync(() -> {
             long startedAt = System.currentTimeMillis();
+            boolean storageAllowed = contextStore.isStorageAllowed(guildId, userId);
 
             List<OpenAIClient.ChatMessage> messages = new ArrayList<>();
             messages.add(new OpenAIClient.ChatMessage("system", buildSystemPrompt()));
@@ -97,14 +98,16 @@ public final class AIManager {
                 messages.add(new OpenAIClient.ChatMessage("system", knowledge.toString().trim()));
             }
 
-            Optional<String> userContext = contextStore.getUserContext(guildId, userId);
+            Optional<String> userContext = storageAllowed
+                    ? contextStore.getUserContext(guildId, userId)
+                    : Optional.empty();
             userContext.ifPresent(context -> messages.add(new OpenAIClient.ChatMessage(
                     "system",
                     "User-Kontext (nur nutzen, wenn relevant): " + context
             )));
 
             int includedHistory = 0;
-            if (config.ux.maxConversationMessages > 0) {
+            if (storageAllowed && config.ux.maxConversationMessages > 0) {
                 List<ContextStore.ConversationMessage> history =
                         contextStore.listConversationMessages(guildId, userId, config.ux.maxConversationMessages);
                 for (ContextStore.ConversationMessage message : history) {
@@ -136,19 +139,21 @@ public final class AIManager {
                     return config.ux.errorReply;
                 }
 
-                String cleanResponse = processLearning(guildId, userId, response);
-                contextStore.saveReplyAudit(
-                        guildId,
-                        userId,
-                        config.openai.model,
-                        userContext.isPresent(),
-                        includedHistory,
-                        knowledgeEntries.stream().map(ContextStore.KnowledgeEntry::id).toList(),
-                        previewKnowledge(knowledgeEntries),
-                        truncate(prompt, 400),
-                        truncate(cleanResponse, 600),
-                        latency
-                );
+                String cleanResponse = processLearning(guildId, userId, response, storageAllowed);
+                if (storageAllowed) {
+                    contextStore.saveReplyAudit(
+                            guildId,
+                            userId,
+                            config.openai.model,
+                            userContext.isPresent(),
+                            includedHistory,
+                            knowledgeEntries.stream().map(ContextStore.KnowledgeEntry::id).toList(),
+                            previewKnowledge(knowledgeEntries),
+                            truncate(prompt, 400),
+                            truncate(cleanResponse, 600),
+                            latency
+                    );
+                }
                 return cleanResponse;
             } catch (Exception e) {
                 totalErrors.incrementAndGet();
@@ -162,6 +167,7 @@ public final class AIManager {
         totalRequests.incrementAndGet();
         return CompletableFuture.supplyAsync(() -> {
             long startedAt = System.currentTimeMillis();
+            boolean storageAllowed = contextStore.isStorageAllowed(guildId, userId);
             try {
                 List<OpenAIClient.ChatMessage> prompt = new ArrayList<>();
                 prompt.add(new OpenAIClient.ChatMessage("system", """
@@ -180,18 +186,20 @@ public final class AIManager {
                 );
                 long latency = Math.max(0L, System.currentTimeMillis() - startedAt);
                 totalLatencyMs.addAndGet(latency);
-                contextStore.saveReplyAudit(
-                        guildId,
-                        userId,
-                        config.openai.model,
-                        false,
-                        0,
-                        List.of(),
-                        "",
-                        truncate("summarize:" + style, 200),
-                        truncate(response, 600),
-                        latency
-                );
+                if (storageAllowed) {
+                    contextStore.saveReplyAudit(
+                            guildId,
+                            userId,
+                            config.openai.model,
+                            false,
+                            0,
+                            List.of(),
+                            "",
+                            truncate("summarize:" + style, 200),
+                            truncate(response, 600),
+                            latency
+                    );
+                }
                 if (response == null || response.isBlank()) {
                     totalErrors.incrementAndGet();
                     return "Konnte keine Zusammenfassung erzeugen.";
@@ -270,13 +278,13 @@ public final class AIManager {
             """;
     }
 
-    private String processLearning(long guildId, long userId, String response) {
+    private String processLearning(long guildId, long userId, String response, boolean storageAllowed) {
         Matcher matcher = LEARN_PATTERN.matcher(response);
         StringBuffer cleanResponse = new StringBuffer();
 
         while (matcher.find()) {
             String learnContent = matcher.group(1).trim();
-            if (!learnContent.isBlank() && learnContent.length() <= config.ux.maxKnowledgeLength) {
+            if (storageAllowed && !learnContent.isBlank() && learnContent.length() <= config.ux.maxKnowledgeLength) {
                 CompletableFuture.runAsync(() -> {
                     try {
                         FactCheckResult result = factCheck(learnContent);

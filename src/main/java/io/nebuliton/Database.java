@@ -118,6 +118,37 @@ public final class Database {
                         created_at INTEGER NOT NULL
                     );
                     """);
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS voice_notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        guild_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        title TEXT,
+                        content TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
+                    """);
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS voice_recordings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        guild_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        title TEXT,
+                        file_name TEXT NOT NULL,
+                        file_url TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
+                    """);
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS user_privacy (
+                        guild_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        allow_storage INTEGER NOT NULL DEFAULT 1,
+                        allow_recording INTEGER NOT NULL DEFAULT 1,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (guild_id, user_id)
+                    );
+                    """);
             addColumnIfMissing(connection, "knowledge_entries", "confidence", "REAL NOT NULL DEFAULT 1.0");
             addColumnIfMissing(connection, "knowledge_entries", "source", "TEXT NOT NULL DEFAULT 'manual'");
         } catch (SQLException e) {

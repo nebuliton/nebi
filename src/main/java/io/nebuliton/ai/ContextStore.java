@@ -67,6 +67,63 @@ public final class ContextStore {
         }
     }
 
+    public void setPrivacy(long guildId, long userId, boolean allowStorage, boolean allowRecording) {
+        String sql = """
+                INSERT INTO user_privacy (guild_id, user_id, allow_storage, allow_recording, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(guild_id, user_id)
+                DO UPDATE SET
+                    allow_storage = excluded.allow_storage,
+                    allow_recording = excluded.allow_recording,
+                    updated_at = excluded.updated_at;
+                """;
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setLong(2, userId);
+            statement.setInt(3, allowStorage ? 1 : 0);
+            statement.setInt(4, allowRecording ? 1 : 0);
+            statement.setLong(5, Instant.now().toEpochMilli());
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to set privacy", e);
+        }
+    }
+
+    public PrivacySettings getPrivacy(long guildId, long userId) {
+        String sql = """
+                SELECT allow_storage, allow_recording, updated_at
+                FROM user_privacy
+                WHERE guild_id = ? AND user_id = ?;
+                """;
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setLong(2, userId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return new PrivacySettings(
+                            resultSet.getInt("allow_storage") == 1,
+                            resultSet.getInt("allow_recording") == 1,
+                            resultSet.getLong("updated_at")
+                    );
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to load privacy settings", e);
+        }
+        return new PrivacySettings(true, true, 0L);
+    }
+
+    public boolean isStorageAllowed(long guildId, long userId) {
+        return getPrivacy(guildId, userId).allowStorage();
+    }
+
+    public boolean isRecordingAllowed(long guildId, long userId) {
+        PrivacySettings settings = getPrivacy(guildId, userId);
+        return settings.allowStorage() && settings.allowRecording();
+    }
+
     public void addKnowledge(long guildId, long addedBy, String text) {
         upsertKnowledge(guildId, addedBy, text, 1.0, "manual");
     }
@@ -157,6 +214,38 @@ public final class ContextStore {
             }
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to list knowledge", e);
+        }
+        return entries;
+    }
+
+    public List<KnowledgeEntry> searchKnowledge(long guildId, String query, int limit) {
+        String sql = """
+                SELECT id, text, confidence, source, added_by, created_at
+                FROM knowledge_entries
+                WHERE guild_id = ? AND lower(text) LIKE lower(?)
+                ORDER BY id DESC
+                LIMIT ?;
+                """;
+        List<KnowledgeEntry> entries = new ArrayList<>();
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setString(2, "%" + query + "%");
+            statement.setInt(3, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    entries.add(new KnowledgeEntry(
+                            resultSet.getLong("id"),
+                            resultSet.getString("text"),
+                            resultSet.getDouble("confidence"),
+                            resultSet.getString("source"),
+                            resultSet.getLong("added_by"),
+                            resultSet.getLong("created_at")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to search knowledge", e);
         }
         return entries;
     }
@@ -606,6 +695,145 @@ public final class ContextStore {
         return results;
     }
 
+    public void addVoiceNote(long guildId, long userId, String title, String content) {
+        String sql = """
+                INSERT INTO voice_notes (guild_id, user_id, title, content, created_at)
+                VALUES (?, ?, ?, ?, ?);
+                """;
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setLong(2, userId);
+            statement.setString(3, title);
+            statement.setString(4, content);
+            statement.setLong(5, Instant.now().toEpochMilli());
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to add voice note", e);
+        }
+    }
+
+    public List<VoiceNote> listVoiceNotes(long guildId, int limit) {
+        String sql = """
+                SELECT id, user_id, title, content, created_at
+                FROM voice_notes
+                WHERE guild_id = ?
+                ORDER BY id DESC
+                LIMIT ?;
+                """;
+        List<VoiceNote> notes = new ArrayList<>();
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setInt(2, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    notes.add(new VoiceNote(
+                            resultSet.getLong("id"),
+                            resultSet.getLong("user_id"),
+                            resultSet.getString("title"),
+                            resultSet.getString("content"),
+                            resultSet.getLong("created_at")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to list voice notes", e);
+        }
+        return notes;
+    }
+
+    public void removeVoiceNote(long guildId, long noteId) {
+        String sql = "DELETE FROM voice_notes WHERE guild_id = ? AND id = ?;";
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setLong(2, noteId);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to remove voice note", e);
+        }
+    }
+
+    public void addVoiceRecording(long guildId, long userId, String title, String fileName, String fileUrl) {
+        String sql = """
+                INSERT INTO voice_recordings (guild_id, user_id, title, file_name, file_url, created_at)
+                VALUES (?, ?, ?, ?, ?, ?);
+                """;
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setLong(2, userId);
+            statement.setString(3, title);
+            statement.setString(4, fileName);
+            statement.setString(5, fileUrl);
+            statement.setLong(6, Instant.now().toEpochMilli());
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to add voice recording", e);
+        }
+    }
+
+    public List<VoiceRecording> listVoiceRecordings(long guildId, int limit) {
+        String sql = """
+                SELECT id, user_id, title, file_name, file_url, created_at
+                FROM voice_recordings
+                WHERE guild_id = ?
+                ORDER BY id DESC
+                LIMIT ?;
+                """;
+        List<VoiceRecording> recordings = new ArrayList<>();
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setInt(2, limit);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    recordings.add(new VoiceRecording(
+                            resultSet.getLong("id"),
+                            resultSet.getLong("user_id"),
+                            resultSet.getString("title"),
+                            resultSet.getString("file_name"),
+                            resultSet.getString("file_url"),
+                            resultSet.getLong("created_at")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to list voice recordings", e);
+        }
+        return recordings;
+    }
+
+    public Optional<VoiceRecording> getVoiceRecording(long guildId, long recordingId) {
+        String sql = """
+                SELECT id, user_id, title, file_name, file_url, created_at
+                FROM voice_recordings
+                WHERE guild_id = ? AND id = ?
+                LIMIT 1;
+                """;
+        try (Connection connection = database.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, guildId);
+            statement.setLong(2, recordingId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return Optional.of(new VoiceRecording(
+                            resultSet.getLong("id"),
+                            resultSet.getLong("user_id"),
+                            resultSet.getString("title"),
+                            resultSet.getString("file_name"),
+                            resultSet.getString("file_url"),
+                            resultSet.getLong("created_at")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to load voice recording", e);
+        }
+        return Optional.empty();
+    }
+
     private String joinKnowledgeIds(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return "";
@@ -643,5 +871,14 @@ public final class ContextStore {
     }
 
     public record UserMessageCount(long userId, int totalMessages) {
+    }
+
+    public record VoiceNote(long id, long userId, String title, String content, long createdAt) {
+    }
+
+    public record VoiceRecording(long id, long userId, String title, String fileName, String fileUrl, long createdAt) {
+    }
+
+    public record PrivacySettings(boolean allowStorage, boolean allowRecording, long updatedAt) {
     }
 }

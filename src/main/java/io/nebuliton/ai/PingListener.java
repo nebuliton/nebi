@@ -87,6 +87,9 @@ public final class PingListener extends ListenerAdapter {
     }
 
     private void storeConversation(long guildId, long userId, String userMessage, String assistantMessage) {
+        if (!contextStore.isStorageAllowed(guildId, userId)) {
+            return;
+        }
         if (config.ux.maxConversationMessages <= 0) {
             return;
         }
