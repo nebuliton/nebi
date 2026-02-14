@@ -77,7 +77,7 @@ public final class Main {
                 .enableIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT)
                 .disableCache(CacheFlag.ACTIVITY, CacheFlag.CLIENT_STATUS, CacheFlag.VOICE_STATE)
                 .addEventListeners(
-                        new Commands(contextStore, config),
+                        new Commands(contextStore, config, aiManager),
                         new PingListener(aiManager, contextStore, config, rateLimiter)
                 );
 

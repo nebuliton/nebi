@@ -5,6 +5,7 @@ import org.sqlite.SQLiteDataSource;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -61,6 +62,8 @@ public final class Database {
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         guild_id INTEGER NOT NULL,
                         text TEXT NOT NULL,
+                        confidence REAL NOT NULL DEFAULT 1.0,
+                        source TEXT NOT NULL DEFAULT 'manual',
                         added_by INTEGER NOT NULL,
                         created_at INTEGER NOT NULL
                     );
@@ -89,8 +92,58 @@ public final class Database {
                     CREATE INDEX IF NOT EXISTS idx_conversation_user
                     ON conversation_messages (guild_id, user_id, id);
                     """);
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS response_feedback (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        guild_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        rating TEXT NOT NULL,
+                        reason TEXT,
+                        created_at INTEGER NOT NULL
+                    );
+                    """);
+            statement.execute("""
+                    CREATE TABLE IF NOT EXISTS ai_reply_audit (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        guild_id INTEGER NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        model TEXT NOT NULL,
+                        used_user_context INTEGER NOT NULL,
+                        history_count INTEGER NOT NULL,
+                        knowledge_ids TEXT,
+                        knowledge_preview TEXT,
+                        prompt_excerpt TEXT,
+                        response_excerpt TEXT,
+                        latency_ms INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL
+                    );
+                    """);
+            addColumnIfMissing(connection, "knowledge_entries", "confidence", "REAL NOT NULL DEFAULT 1.0");
+            addColumnIfMissing(connection, "knowledge_entries", "source", "TEXT NOT NULL DEFAULT 'manual'");
         } catch (SQLException e) {
             throw new IllegalStateException("Failed to initialize database schema", e);
         }
+    }
+
+    private void addColumnIfMissing(Connection connection, String table, String column, String definition)
+            throws SQLException {
+        if (hasColumn(connection, table, column)) {
+            return;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition + ";");
+        }
+    }
+
+    private boolean hasColumn(Connection connection, String table, String column) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("PRAGMA table_info(" + table + ");")) {
+            while (resultSet.next()) {
+                if (column.equalsIgnoreCase(resultSet.getString("name"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
