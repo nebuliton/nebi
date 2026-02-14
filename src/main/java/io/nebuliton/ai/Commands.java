@@ -697,12 +697,14 @@ public final class Commands extends ListenerAdapter {
 
     private MessageCreateData buildComponentMessage(String icon, String title, String description) {
         MessageCreateBuilder builder = new MessageCreateBuilder();
+        builder.useComponentsV2(true);
         builder.addComponents(Container.of(TextDisplay.of(formatComponentText(icon, title, description))));
         return builder.build();
     }
 
     private MessageEditData buildComponentEdit(String icon, String title, String description) {
         MessageEditBuilder builder = new MessageEditBuilder();
+        builder.useComponentsV2(true);
         builder.setComponents(List.of(Container.of(TextDisplay.of(formatComponentText(icon, title, description)))));
         return builder.build();
     }
