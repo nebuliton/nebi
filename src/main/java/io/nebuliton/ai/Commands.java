@@ -3,6 +3,8 @@ package io.nebuliton.ai;
 import io.nebuliton.config.Config;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.components.container.Container;
+import net.dv8tion.jda.api.components.textdisplay.TextDisplay;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
@@ -13,6 +15,10 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
+import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
+import net.dv8tion.jda.api.utils.messages.MessageCreateData;
+import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
+import net.dv8tion.jda.api.utils.messages.MessageEditData;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -180,9 +186,7 @@ public final class Commands extends ListenerAdapter {
     @Override
     public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
         if (!event.isFromGuild()) {
-            event.reply("Dieser Command geht nur auf einem Server.")
-                    .setEphemeral(true)
-                    .queue();
+            replyError(event, "Nur im Server verfügbar", "Dieser Command funktioniert nicht in DMs.");
             return;
         }
 
@@ -206,9 +210,7 @@ public final class Commands extends ListenerAdapter {
     private void handleContext(SlashCommandInteractionEvent event) {
         String sub = event.getSubcommandName();
         if (sub == null) {
-            event.reply("Bitte einen Subcommand verwenden: add, clear oder view.")
-                    .setEphemeral(true)
-                    .queue();
+            replyWarning(event, "Subcommand fehlt", "Nutze `add`, `clear` oder `view`.");
             return;
         }
 
@@ -216,7 +218,7 @@ public final class Commands extends ListenerAdapter {
             case "add" -> handleContextAdd(event);
             case "clear" -> handleContextClear(event);
             case "view" -> handleContextView(event);
-            default -> event.reply("Unbekannter Subcommand.").setEphemeral(true).queue();
+            default -> replyError(event, "Unbekannter Subcommand", "Bitte überprüfe den Command-Aufruf.");
         }
     }
 
@@ -228,16 +230,12 @@ public final class Commands extends ListenerAdapter {
 
         String context = getRequiredString(event, "context");
         if (context.length() > config.ux.maxContextLength) {
-            event.reply("Kontext ist zu lang. Max " + config.ux.maxContextLength + " Zeichen.")
-                    .setEphemeral(true)
-                    .queue();
+            replyWarning(event, "Kontext zu lang", "Maximal **" + config.ux.maxContextLength + "** Zeichen erlaubt.");
             return;
         }
 
         contextStore.setUserContext(event.getGuild().getIdLong(), target.getIdLong(), context);
-        event.reply("✅ Kontext gespeichert für **" + safeName(target) + "**.")
-                .setEphemeral(true)
-                .queue();
+        replySuccess(event, "Kontext gespeichert", "Für **" + safeName(target) + "** wurde der Kontext aktualisiert.");
     }
 
     private void handleContextClear(SlashCommandInteractionEvent event) {
@@ -247,9 +245,7 @@ public final class Commands extends ListenerAdapter {
         }
 
         contextStore.clearUserContext(event.getGuild().getIdLong(), target.getIdLong());
-        event.reply("🧹 Kontext gelöscht für **" + safeName(target) + "**.")
-                .setEphemeral(true)
-                .queue();
+        replySuccess(event, "Kontext gelöscht", "Für **" + safeName(target) + "** wurde der Kontext entfernt.");
     }
 
     private void handleContextView(SlashCommandInteractionEvent event) {
@@ -260,31 +256,23 @@ public final class Commands extends ListenerAdapter {
 
         Optional<String> context = contextStore.getUserContext(event.getGuild().getIdLong(), target.getIdLong());
         if (context.isEmpty()) {
-            event.reply("Kein Kontext gespeichert für **" + safeName(target) + "**.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Kein Kontext vorhanden", "Für **" + safeName(target) + "** ist nichts gespeichert.");
             return;
         }
 
         String preview = truncate(context.get(), 1800);
-        event.reply("📋 Kontext für **" + safeName(target) + "**:\n" + preview)
-                .setEphemeral(true)
-                .queue();
+        replyInfo(event, "Kontext für " + safeName(target), "```" + preview + "```");
     }
 
     private void handleKnowledge(SlashCommandInteractionEvent event) {
         if (!hasManageServer(event)) {
-            event.reply("❌ Dafür brauchst du Manage Server.")
-                    .setEphemeral(true)
-                    .queue();
+            replyError(event, "Keine Berechtigung", "Dafür brauchst du **Manage Server**.");
             return;
         }
 
         String sub = event.getSubcommandName();
         if (sub == null) {
-            event.reply("Bitte einen Subcommand verwenden: add, list, review oder remove.")
-                    .setEphemeral(true)
-                    .queue();
+            replyWarning(event, "Subcommand fehlt", "Nutze `add`, `list`, `review` oder `remove`.");
             return;
         }
 
@@ -293,23 +281,19 @@ public final class Commands extends ListenerAdapter {
             case "list" -> handleKnowledgeList(event);
             case "review" -> handleKnowledgeReview(event);
             case "remove" -> handleKnowledgeRemove(event);
-            default -> event.reply("Unbekannter Subcommand.").setEphemeral(true).queue();
+            default -> replyError(event, "Unbekannter Subcommand", "Bitte überprüfe den Command-Aufruf.");
         }
     }
 
     private void handleKnowledgeAdd(SlashCommandInteractionEvent event) {
         String text = getRequiredString(event, "text");
         if (text.length() > config.ux.maxKnowledgeLength) {
-            event.reply("Wissen ist zu lang. Max " + config.ux.maxKnowledgeLength + " Zeichen.")
-                    .setEphemeral(true)
-                    .queue();
+            replyWarning(event, "Wissen zu lang", "Maximal **" + config.ux.maxKnowledgeLength + "** Zeichen erlaubt.");
             return;
         }
 
         contextStore.addKnowledge(event.getGuild().getIdLong(), event.getUser().getIdLong(), text);
-        event.reply("🧠 Wissen gespeichert!")
-                .setEphemeral(true)
-                .queue();
+        replySuccess(event, "Wissen gespeichert", "Der Eintrag wurde zur Wissensbasis hinzugefügt.");
     }
 
     private void handleKnowledgeList(SlashCommandInteractionEvent event) {
@@ -318,9 +302,7 @@ public final class Commands extends ListenerAdapter {
         List<ContextStore.KnowledgeEntry> entries =
                 contextStore.listKnowledge(event.getGuild().getIdLong(), safeLimit);
         if (entries.isEmpty()) {
-            event.reply("Noch kein Wissen gespeichert.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Keine Wissenseinträge", "Aktuell ist noch nichts gespeichert.");
             return;
         }
 
@@ -336,9 +318,7 @@ public final class Commands extends ListenerAdapter {
                     .append('\n');
         }
 
-        event.reply(truncate(builder.toString(), 1900))
-                .setEphemeral(true)
-                .queue();
+        replyInfo(event, "Wissenseinträge", "```" + truncate(builder.toString(), 1700) + "```");
     }
 
     private void handleKnowledgeReview(SlashCommandInteractionEvent event) {
@@ -348,9 +328,7 @@ public final class Commands extends ListenerAdapter {
         List<ContextStore.KnowledgeEntry> entries =
                 contextStore.listKnowledgeForReview(event.getGuild().getIdLong(), limit, maxConfidence);
         if (entries.isEmpty()) {
-            event.reply("Keine learned Einträge unter der gewählten Confidence.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Nichts zu reviewen", "Keine `learned`-Einträge unter der gewählten Confidence.");
             return;
         }
 
@@ -364,32 +342,24 @@ public final class Commands extends ListenerAdapter {
                     .append('\n');
         }
 
-        event.reply(truncate(builder.toString(), 1900))
-                .setEphemeral(true)
-                .queue();
+        replyInfo(event, "Knowledge Review", "```" + truncate(builder.toString(), 1700) + "```");
     }
 
     private void handleKnowledgeRemove(SlashCommandInteractionEvent event) {
         long id = getRequiredLong(event, "id");
         contextStore.removeKnowledge(event.getGuild().getIdLong(), id);
-        event.reply("🗑️ Wissenseintrag gelöscht.")
-                .setEphemeral(true)
-                .queue();
+        replySuccess(event, "Wissenseintrag gelöscht", "Der Eintrag wurde entfernt.");
     }
 
     private void handleBlacklist(SlashCommandInteractionEvent event) {
         if (!hasManageServer(event)) {
-            event.reply("❌ Dafür brauchst du Manage Server.")
-                    .setEphemeral(true)
-                    .queue();
+            replyError(event, "Keine Berechtigung", "Dafür brauchst du **Manage Server**.");
             return;
         }
 
         String sub = event.getSubcommandName();
         if (sub == null) {
-            event.reply("Bitte einen Subcommand verwenden: add, remove oder list.")
-                    .setEphemeral(true)
-                    .queue();
+            replyWarning(event, "Subcommand fehlt", "Nutze `add`, `remove` oder `list`.");
             return;
         }
 
@@ -397,7 +367,7 @@ public final class Commands extends ListenerAdapter {
             case "add" -> handleBlacklistAdd(event);
             case "remove" -> handleBlacklistRemove(event);
             case "list" -> handleBlacklistList(event);
-            default -> event.reply("Unbekannter Subcommand.").setEphemeral(true).queue();
+            default -> replyError(event, "Unbekannter Subcommand", "Bitte überprüfe den Command-Aufruf.");
         }
     }
 
@@ -410,17 +380,13 @@ public final class Commands extends ListenerAdapter {
                 event.getUser().getIdLong(),
                 reason
         );
-        event.reply("⛔ **" + safeName(target) + "** ist jetzt auf der Blacklist.")
-                .setEphemeral(true)
-                .queue();
+        replySuccess(event, "Blacklist aktualisiert", "**" + safeName(target) + "** wurde auf die Blacklist gesetzt.");
     }
 
     private void handleBlacklistRemove(SlashCommandInteractionEvent event) {
         User target = event.getOption("user", event.getUser(), OptionMapping::getAsUser);
         contextStore.removeBlacklist(event.getGuild().getIdLong(), target.getIdLong());
-        event.reply("✅ **" + safeName(target) + "** von der Blacklist entfernt.")
-                .setEphemeral(true)
-                .queue();
+        replySuccess(event, "Blacklist aktualisiert", "**" + safeName(target) + "** wurde von der Blacklist entfernt.");
     }
 
     private void handleBlacklistList(SlashCommandInteractionEvent event) {
@@ -429,9 +395,7 @@ public final class Commands extends ListenerAdapter {
         List<ContextStore.BlacklistEntry> entries =
                 contextStore.listBlacklist(event.getGuild().getIdLong(), safeLimit);
         if (entries.isEmpty()) {
-            event.reply("Blacklist ist leer.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Blacklist", "Keine Einträge vorhanden.");
             return;
         }
 
@@ -446,18 +410,14 @@ public final class Commands extends ListenerAdapter {
             builder.append('\n');
         }
 
-        event.reply(truncate(builder.toString(), 1900))
-                .setEphemeral(true)
-                .queue();
+        replyInfo(event, "Blacklist", "```" + truncate(builder.toString(), 1700) + "```");
     }
 
     private void handleForget(SlashCommandInteractionEvent event) {
         long guildId = event.getGuild().getIdLong();
         long userId = event.getUser().getIdLong();
         contextStore.clearConversation(guildId, userId);
-        event.reply("🧹 Hab alles vergessen, was wir geredet haben. Frischer Start!")
-                .setEphemeral(true)
-                .queue();
+        replySuccess(event, "Konversation gelöscht", "Alles zurückgesetzt. Frischer Start.");
     }
 
     private void handleStats(SlashCommandInteractionEvent event) {
@@ -481,9 +441,7 @@ public final class Commands extends ListenerAdapter {
                 ⭐ Feedback 7 Tage: **%d good / %d bad**
                 """, knowledgeCount, contextCount, conversationCount, blacklistCount, feedback.goodCount(), feedback.badCount());
 
-        event.reply(stats)
-                .setEphemeral(true)
-                .queue();
+        replyInfo(event, "Server-Statistiken", stats);
     }
 
     private void handleWhy(SlashCommandInteractionEvent event) {
@@ -491,9 +449,7 @@ public final class Commands extends ListenerAdapter {
         long userId = event.getUser().getIdLong();
         Optional<ContextStore.ReplyAudit> audit = contextStore.getLatestReplyAudit(guildId, userId);
         if (audit.isEmpty()) {
-            event.reply("Noch keine Antwortdaten gefunden. Schreib mir zuerst eine Nachricht per Mention.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Noch keine Daten", "Schreib mir zuerst eine Nachricht per Mention.");
             return;
         }
 
@@ -516,7 +472,7 @@ public final class Commands extends ListenerAdapter {
                 a.createdAt() / 1000
         );
 
-        event.reply(truncate(text, 1900)).setEphemeral(true).queue();
+        replyInfo(event, "Warum diese Antwort?", truncate(text, 1700));
     }
 
     private void handleSources(SlashCommandInteractionEvent event) {
@@ -524,23 +480,17 @@ public final class Commands extends ListenerAdapter {
         long userId = event.getUser().getIdLong();
         Optional<ContextStore.ReplyAudit> audit = contextStore.getLatestReplyAudit(guildId, userId);
         if (audit.isEmpty()) {
-            event.reply("Keine Quellen gefunden. Frag mich erst etwas per Mention.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Keine Quellen", "Frag mich erst etwas per Mention.");
             return;
         }
 
         String preview = audit.get().knowledgePreview();
         if (preview == null || preview.isBlank()) {
-            event.reply("Bei deiner letzten Antwort wurden keine gespeicherten Wissenseinträge genutzt.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Keine Knowledge-Quellen", "Bei der letzten Antwort wurde kein gespeichertes Wissen genutzt.");
             return;
         }
 
-        event.reply(truncate("📚 Verwendete Quellen (Auszug):\n" + preview, 1900))
-                .setEphemeral(true)
-                .queue();
+        replyInfo(event, "Verwendete Quellen", "```" + truncate(preview, 1700) + "```");
     }
 
     private void handleRate(SlashCommandInteractionEvent event) {
@@ -551,9 +501,7 @@ public final class Commands extends ListenerAdapter {
         };
 
         if (rating.isBlank()) {
-            event.reply("Rating muss `good` oder `bad` sein.")
-                    .setEphemeral(true)
-                    .queue();
+            replyWarning(event, "Ungültiges Rating", "Nutze `good` oder `bad`.");
             return;
         }
 
@@ -562,9 +510,7 @@ public final class Commands extends ListenerAdapter {
                 event.getUser().getIdLong()
         );
         if (audit.isEmpty()) {
-            event.reply("Ich habe noch keine letzte Antwort für dich gespeichert.")
-                    .setEphemeral(true)
-                    .queue();
+            replyInfo(event, "Noch keine letzte Antwort", "Bewerte zuerst nach einer Antwort per Mention.");
             return;
         }
 
@@ -574,7 +520,7 @@ public final class Commands extends ListenerAdapter {
         String response = "good".equals(rating)
                 ? "Danke fürs positive Feedback."
                 : "Danke, ich nutze das Feedback zur Verbesserung.";
-        event.reply("⭐ " + response).setEphemeral(true).queue();
+        replySuccess(event, "Feedback gespeichert", response);
     }
 
     private void handleSummarize(SlashCommandInteractionEvent event) {
@@ -598,7 +544,7 @@ public final class Commands extends ListenerAdapter {
             }
 
             if (lines.isEmpty()) {
-                hook.editOriginal("Keine verwertbaren Nachrichten gefunden.").queue();
+                hook.editOriginal(buildComponentEdit("⚠️", "Keine Daten", "Keine verwertbaren Nachrichten gefunden.")).queue();
                 return;
             }
 
@@ -607,19 +553,21 @@ public final class Commands extends ListenerAdapter {
                     event.getUser().getIdLong(),
                     style,
                     lines
-            ).thenAccept(summary -> hook.editOriginal(truncate(summary, 1900)).queue())
+            ).thenAccept(summary -> hook.editOriginal(
+                            buildComponentEdit("ℹ️", "Zusammenfassung", truncate(summary, 3800))
+                    ).queue())
                     .exceptionally(error -> {
-                        hook.editOriginal(config.ux.errorReply).queue();
+                        hook.editOriginal(buildComponentEdit("❌", "Fehler", config.ux.errorReply)).queue();
                         return null;
                     });
-        }, error -> hook.editOriginal("Konnte Channel-Historie nicht laden.").queue()));
+        }, error -> hook.editOriginal(
+                buildComponentEdit("❌", "Fehler", "Konnte Channel-Historie nicht laden.")
+        ).queue()));
     }
 
     private void handleAIHealth(SlashCommandInteractionEvent event) {
         if (!hasManageServer(event)) {
-            event.reply("❌ Dafür brauchst du Manage Server.")
-                    .setEphemeral(true)
-                    .queue();
+            replyError(event, "Keine Berechtigung", "Dafür brauchst du **Manage Server**.");
             return;
         }
 
@@ -650,15 +598,13 @@ public final class Commands extends ListenerAdapter {
                 topLine
         );
 
-        event.reply(truncate(text, 1900)).setEphemeral(true).queue();
+        replyInfo(event, "AI Health", truncate(text, 1700));
     }
 
     private void handleTopChatters(SlashCommandInteractionEvent event) {
         int limit = Math.max(1, Math.min(getOptionalInt(event, "limit", 10), 20));
         String top = buildTopChattersText(event.getGuild().getIdLong(), limit);
-        event.reply(truncate("🏆 **Top Chatters**\n" + top, 1900))
-                .setEphemeral(true)
-                .queue();
+        replyInfo(event, "Top Chatters", top);
     }
 
     private String buildTopChattersText(long guildId, int limit) {
@@ -690,9 +636,7 @@ public final class Commands extends ListenerAdapter {
         if (hasManageServer(event)) {
             return true;
         }
-        event.reply("Du darfst nur deinen eigenen Kontext bearbeiten.")
-                .setEphemeral(true)
-                .queue();
+        replyError(event, "Keine Berechtigung", "Du darfst nur deinen eigenen Kontext bearbeiten.");
         return false;
     }
 
@@ -725,6 +669,48 @@ public final class Commands extends ListenerAdapter {
 
     private double getOptionalDouble(SlashCommandInteractionEvent event, String option, double fallback) {
         return event.getOption(option, fallback, OptionMapping::getAsDouble);
+    }
+
+    private void replyInfo(SlashCommandInteractionEvent event, String title, String description) {
+        event.reply(buildComponentMessage("ℹ️", title, description))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void replySuccess(SlashCommandInteractionEvent event, String title, String description) {
+        event.reply(buildComponentMessage("✅", title, description))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void replyWarning(SlashCommandInteractionEvent event, String title, String description) {
+        event.reply(buildComponentMessage("⚠️", title, description))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private void replyError(SlashCommandInteractionEvent event, String title, String description) {
+        event.reply(buildComponentMessage("❌", title, description))
+                .setEphemeral(true)
+                .queue();
+    }
+
+    private MessageCreateData buildComponentMessage(String icon, String title, String description) {
+        MessageCreateBuilder builder = new MessageCreateBuilder();
+        builder.addComponents(Container.of(TextDisplay.of(formatComponentText(icon, title, description))));
+        return builder.build();
+    }
+
+    private MessageEditData buildComponentEdit(String icon, String title, String description) {
+        MessageEditBuilder builder = new MessageEditBuilder();
+        builder.setComponents(List.of(Container.of(TextDisplay.of(formatComponentText(icon, title, description)))));
+        return builder.build();
+    }
+
+    private String formatComponentText(String icon, String title, String description) {
+        return "## " + icon + " " + title + "\n"
+                + truncate(description, 3600)
+                + "\n\n-# Nebi Commands • <t:" + (Instant.now().toEpochMilli() / 1000) + ":R>";
     }
 
     private String safeName(User user) {
